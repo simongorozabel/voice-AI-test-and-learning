@@ -1,0 +1,5 @@
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+.\venv\Scripts\activate
+
+uvicorn main:app --reload

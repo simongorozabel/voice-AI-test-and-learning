@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Asistente de Voz</title>
+    <style>
+      :root {
+        --background-color: #121212;
+        --text-color: #e0e0e0;
+        --primary-accent: #03a9f4; /* Light Blue */
+        --secondary-accent: #4caf50; /* Green (used for send button) */
+        --error-accent: #f44336; /* Red (used for record button) */
+        --recording-pulse-color: rgba(244, 67, 54, 0.7);
+        --chatbox-bg: #1e1e1e;
+        --input-bg: #2a2a2a;
+        --agent-message-bg: #3a3a3a;
+        --user-message-bg: var(--primary-accent);
+        --user-message-text: #121212; /* Dark text on light blue */
+        --system-message-color: #888;
+        --border-color: #444;
+        --hover-brightness: 1.2;
+        --active-brightness: 0.9;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; /* Modern font stack */
+        margin: 0; /* Remove default margin */
+        padding: 20px;
+        background-color: var(--background-color);
+        color: var(--text-color);
+        display: flex;
+        flex-direction: column;
+        min-height: calc(100vh - 40px); /* Full height minus padding */
+        box-sizing: border-box;
+      }
+
+      h1 {
+        text-align: center;
+        color: var(--primary-accent);
+        margin-top: 0;
+        margin-bottom: 20px;
+        font-weight: 300; /* Lighter font weight */
+      }
+
+      #status {
+        text-align: center;
+        margin-bottom: 15px;
+        font-weight: bold;
+        color: var(--system-message-color); /* Default muted color */
+        min-height: 1.2em; /* Prevent layout shift */
+      }
+
+      #controls {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 15px;
+      }
+
+      button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 20px; /* More rounded */
+        cursor: pointer;
+        font-size: 1em;
+        font-weight: 600; /* Slightly bolder text */
+        transition: background-color 0.2s ease, transform 0.1s ease,
+          filter 0.2s ease;
+        color: var(--text-color);
+        margin: 0 5px; /* Add spacing between buttons if needed */
+      }
+
+      button:hover {
+        filter: brightness(var(--hover-brightness));
+      }
+
+      button:active {
+        transform: scale(0.98);
+        filter: brightness(var(--active-brightness));
+      }
+
+      #sendButton {
+        background-color: var(--secondary-accent);
+      }
+
+      #recordButton {
+        background-color: var(--error-accent);
+      }
+
+      #recordButton.recording {
+        animation: pulse 1.5s infinite;
+      }
+
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 var(--recording-pulse-color);
+        }
+        70% {
+          box-shadow: 0 0 0 10px rgba(244, 67, 54, 0); /* Use RGB with alpha for fade out */
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(244, 67, 54, 0);
+        }
+      }
+
+      #chatbox {
+        flex-grow: 1; /* Take available space */
+        border: 1px solid var(--border-color);
+        overflow-y: auto; /* Changed from scroll to auto */
+        margin-bottom: 15px;
+        padding: 15px;
+        background-color: var(--chatbox-bg);
+        border-radius: 8px; /* Slightly rounded corners */
+        scroll-behavior: smooth; /* Smooth scrolling */
+        max-width: 500px; /* Limit width on larger screens */
+        margin-left: auto; /* Center the element */
+        margin-right: auto; /* Center the element */
+        width: 100%; /* Ensure it takes full width up to max-width */
+        box-sizing: border-box; /* Include padding/border in width */
+      }
+
+      /* Style scrollbar for Webkit browsers */
+      #chatbox::-webkit-scrollbar {
+        width: 8px;
+      }
+      #chatbox::-webkit-scrollbar-track {
+        background: var(--chatbox-bg);
+        border-radius: 4px;
+      }
+      #chatbox::-webkit-scrollbar-thumb {
+        background-color: var(--border-color);
+        border-radius: 4px;
+        border: 2px solid var(--chatbox-bg); /* Padding around thumb */
+      }
+      #chatbox::-webkit-scrollbar-thumb:hover {
+        background-color: var(--system-message-color);
+      }
+
+      #inputArea {
+        display: flex;
+        gap: 10px; /* Increased gap */
+        max-width: 500px; /* Limit width on larger screens */
+        margin-left: auto; /* Center the element */
+        margin-right: auto; /* Center the element */
+        width: 100%; /* Ensure it takes full width up to max-width */
+        box-sizing: border-box; /* Include padding/border in width */
+      }
+
+      #textInput {
+        flex-grow: 1;
+        padding: 12px 15px; /* Slightly more padding */
+        border: 1px solid var(--border-color);
+        border-radius: 20px; /* Match button radius */
+        background-color: var(--input-bg);
+        color: var(--text-color);
+        font-size: 1em;
+      }
+      #textInput::placeholder {
+        color: var(--system-message-color);
+        opacity: 0.8;
+      }
+      #textInput:focus {
+        outline: none;
+        border-color: var(--primary-accent);
+        box-shadow: 0 0 0 2px rgba(3, 169, 244, 0.3); /* Subtle focus glow */
+      }
+
+      .message {
+        margin-bottom: 12px; /* Increased spacing */
+        padding: 10px 15px; /* Adjusted padding */
+        border-radius: 18px; /* Consistent rounding */
+        max-width: 80%; /* Slightly wider max-width */
+        line-height: 1.5;
+        word-wrap: break-word; /* Ensure long words break */
+        clear: both; /* Ensure messages don't overlap weirdly */
+        opacity: 0; /* Start hidden for animation */
+        transform: translateY(10px); /* Start slightly lower */
+        animation: fadeIn 0.3s ease forwards; /* Fade-in animation */
+      }
+
+      @keyframes fadeIn {
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .user-message {
+        float: right; /* Use float for alignment */
+        background-color: var(--user-message-bg);
+        color: var(--user-message-text);
+        border-bottom-right-radius: 5px; /* Chat bubble style */
+        margin-left: auto; /* Keep alignment logic */
+      }
+
+      .agent-message {
+        float: left; /* Use float for alignment */
+        background-color: var(--agent-message-bg);
+        color: var(--text-color);
+        border-bottom-left-radius: 5px; /* Chat bubble style */
+        margin-right: auto; /* Keep alignment logic */
+      }
+
+      .system-message {
+        text-align: center;
+        color: var(--system-message-color);
+        font-style: italic;
+        font-size: 0.9em;
+        width: 100%;
+        margin-top: 10px;
+        margin-bottom: 10px;
+        float: none; /* Override float */
+      }
+
+      /* Clear floats after messages */
+      #chatbox::after {
+        content: "";
+        display: table;
+        clear: both;
+      }
+
+      /* Mobile Responsiveness */
+      @media (max-width: 600px) {
+        body {
+          padding: 10px;
+          min-height: calc(100vh - 20px);
+        }
+
+        h1 {
+          font-size: 1.8em;
+        }
+
+        #chatbox {
+          padding: 10px;
+        }
+
+        .message {
+          max-width: 90%; /* Allow messages to be wider on small screens */
+          padding: 8px 12px;
+        }
+
+        #inputArea {
+          flex-direction: column; /* Stack input and button vertically */
+          gap: 8px;
+        }
+
+        #textInput {
+          font-size: 0.95em;
+          padding: 10px 12px;
+        }
+
+        button {
+          padding: 12px 15px; /* Slightly larger tap target */
+          width: 100%; /* Make buttons full width in vertical layout */
+          box-sizing: border-box; /* Include padding in width */
+          margin: 0; /* Remove horizontal margins */
+        }
+
+        #controls {
+          /* Optional: Stack record button if needed */
+          flex-direction: column; /* Stack vertically */
+          gap: 8px; /* Add gap between stacked buttons */
+          align-items: center; /* Center the button */
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Asistente de Voz</h1>
+    <div id="status">Conectando...</div>
+    <div id="controls">
+      <button id="recordButton">🎤 Grabar</button>
+    </div>
+    <div id="chatbox"></div>
+    <div id="inputArea">
+      <input
+        type="text"
+        id="textInput"
+        placeholder="Escribe o graba tu mensaje..."
+      />
+      <button id="sendButton">Enviar</button>
+    </div>
+
+    <script>
+      // --- WebSocket Variables ---
+      const websocketUrl = "ws://localhost:8000/ws/voice";
+      let websocket;
+
+      // --- Audio Variables ---
+      let audioContext;
+      let audioBufferQueue = []; // Renamed for clarity: stores ArrayBuffers
+      let isPlaying = false;
+      let currentAudioSource = null; // Variable para la fuente de audio actual
+
+      // --- Speech Recognition Variables ---
+      let recognition;
+      let isRecording = false;
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      // --- DOM Elements ---
+      const statusDiv = document.getElementById("status");
+      const chatbox = document.getElementById("chatbox");
+      const textInput = document.getElementById("textInput");
+      const sendButton = document.getElementById("sendButton");
+      const recordButton = document.getElementById("recordButton");
+
+      // --- Initialization ---
+      if (SpeechRecognition) {
+        initializeSpeechRecognition();
+      } else {
+        recordButton.disabled = true;
+        recordButton.textContent = "Reconocimiento no Soportado";
+        addMessage(
+          "Tu navegador no soporta la API Web Speech.",
+          "system-message"
+        );
+      }
+      connectWebSocket();
+
+      // --- WebSocket Functions ---
+      function connectWebSocket() {
+        websocket = new WebSocket(websocketUrl);
+
+        websocket.onopen = () => {
+          console.log("WebSocket conectado.");
+          statusDiv.textContent = "Conectado.";
+          statusDiv.style.color = "green";
+          addMessage("Conectado al servidor.", "system-message");
+        };
+
+        websocket.onmessage = async (event) => {
+          if (event.data instanceof Blob) {
+            console.log("Recibido chunk de audio.");
+            const arrayBuffer = await event.data.arrayBuffer();
+            audioBufferQueue.push(arrayBuffer); // Add buffer to the queue
+            initializeAudio(); // Asegura que el contexto esté listo
+            // No reproducir inmediatamente, esperar a SYSTEM_AUDIO_END
+          } else if (typeof event.data === "string") {
+            console.log("Recibido mensaje de texto:", event.data);
+            handleTextMessage(event.data);
+          }
+        };
+
+        websocket.onerror = (error) => {
+          console.error("Error en WebSocket:", error);
+          statusDiv.textContent = "Error de conexión.";
+          statusDiv.style.color = "red";
+          addMessage("Error en la conexión WebSocket.", "system-message");
+        };
+
+        websocket.onclose = (event) => {
+          console.log("WebSocket desconectado:", event.reason, event.code);
+          statusDiv.textContent = `Desconectado: ${
+            event.reason || "Cierre normal"
+          }`;
+          statusDiv.style.color = "orange";
+          addMessage(
+            `Desconectado del servidor (Código: ${event.code})`,
+            "system-message"
+          );
+          // Opcional: intentar reconectar
+          // setTimeout(connectWebSocket, 5000);
+        };
+      }
+
+      function handleTextMessage(data) {
+        if (data === "SYSTEM_AUDIO_END") {
+          console.log("Fin del stream de audio marcado por el servidor.");
+          // Ahora que terminó el stream, intenta reproducir el audio acumulado
+          if (audioBufferQueue.length > 0) {
+            playAccumulatedAudio();
+          } else {
+            console.log(
+              "SYSTEM_AUDIO_END recibido, pero no hay audio en cola."
+            );
+          }
+        } else if (data.startsWith("TEXT_RESPONSE:")) {
+          const text = data.substring("TEXT_RESPONSE:".length);
+          addMessage(`${text}`, "agent-message"); // Removed "Alex: " prefix for cleaner look
+        } else if (data.startsWith("SYSTEM_ERROR:")) {
+          const errorMsg = data.substring("SYSTEM_ERROR:".length);
+          addMessage(`Error del sistema: ${errorMsg}`, "system-message");
+        } else {
+          addMessage(data, "system-message");
+        }
+      }
+
+      function sendData(data) {
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+          websocket.send(data);
+          return true;
+        } else {
+          addMessage("No estás conectado.", "system-message");
+          return false;
+        }
+      }
+
+      // Helper function to concatenate ArrayBuffers
+      function concatenateArrayBuffers(buffers) {
+        let totalLength = 0;
+        buffers.forEach((buffer) => {
+          totalLength += buffer.byteLength;
+        });
+
+        const result = new Uint8Array(totalLength);
+        let offset = 0;
+        buffers.forEach((buffer) => {
+          result.set(new Uint8Array(buffer), offset);
+          offset += buffer.byteLength;
+        });
+        return result.buffer; // Return as ArrayBuffer
+      }
+
+      // --- Audio Playback Functions ---
+      function initializeAudio() {
+        if (!audioContext) {
+          try {
+            window.AudioContext =
+              window.AudioContext || window.webkitAudioContext;
+            audioContext = new AudioContext();
+            console.log("AudioContext inicializado.");
+            // Resumir si está suspendido (necesario después de la interacción del usuario)
+            if (audioContext.state === "suspended") {
+              audioContext
+                .resume()
+                .then(() =>
+                  console.log("AudioContext resumido post-inicialización.")
+                );
+            }
+          } catch (e) {
+            console.error("Error al crear AudioContext:", e);
+            addMessage("Error al inicializar el audio.", "system-message");
+            statusDiv.textContent = "Error de audio.";
+          }
+        }
+      }
+
+      async function playAccumulatedAudio() {
+        if (!audioContext || isPlaying || audioBufferQueue.length === 0) {
+          console.log(
+            "playAccumulatedAudio: No se puede reproducir (Contexto no listo, ya reproduciendo, o cola vacía)"
+          );
+          return;
+        }
+
+        if (audioContext.state === "suspended") {
+          try {
+            await audioContext.resume();
+            console.log("AudioContext resumido en reproducción.");
+          } catch (err) {
+            console.error("Error al resumir AudioContext:", err);
+            addMessage(
+              "No se pudo iniciar el audio. Haz clic en la página.",
+              "system-message"
+            );
+            audioBufferQueue = [];
+            return;
+          }
+        }
+
+        isPlaying = true;
+        console.log(
+          `Iniciando reproducción de ${audioBufferQueue.length} chunks acumulados...`
+        );
+
+        // 1. Concatenar todos los buffers en la cola
+        const combinedBuffer = concatenateArrayBuffers(audioBufferQueue);
+        audioBufferQueue = []; // Limpiar la cola después de concatenar
+
+        console.log(`Buffer combinado: ${combinedBuffer.byteLength} bytes.`);
+
+        // 2. Intentar decodificar el buffer combinado
+        try {
+          const audioBuffer = await audioContext.decodeAudioData(
+            combinedBuffer
+          );
+          console.log("Audio decodificado correctamente.");
+
+          // 3. Reproducir el buffer decodificado
+          const source = audioContext.createBufferSource();
+          source.buffer = audioBuffer;
+          source.connect(audioContext.destination);
+
+          currentAudioSource = source; // Guarda la referencia a la fuente
+
+          await new Promise((resolve, reject) => {
+            source.onended = () => {
+              console.log("Audio completo reproducido o detenido.");
+              // Solo resetea si esta fuente específica era la que estaba activa
+              if (currentAudioSource === source) {
+                isPlaying = false;
+                currentAudioSource = null;
+              }
+              resolve(); // Resuelve la promesa
+            };
+            try {
+              source.start();
+              console.log("Reproducción iniciada.");
+            } catch (startError) {
+              console.error("Error al iniciar la reproducción:", startError);
+              // Asegúrate de limpiar el estado si source.start() falla
+              if (currentAudioSource === source) {
+                isPlaying = false;
+                currentAudioSource = null;
+              }
+              reject(startError);
+            }
+          });
+          // console.log("Audio completo reproducido."); // Movido a onended
+        } catch (e) {
+          console.error(
+            "Error al decodificar o reproducir el audio acumulado:",
+            e
+          );
+          addMessage("Error al procesar el audio recibido.", "system-message");
+          // Ya no se necesita isPlaying = false aquí, se maneja en onended
+        }
+
+        console.log("Fin de la reproducción de la cola.");
+      }
+
+      // --- Speech Recognition Functions ---
+      function initializeSpeechRecognition() {
+        recognition = new SpeechRecognition();
+        recognition.lang = "es-ES"; // Configura el idioma (ajusta si es necesario)
+        recognition.continuous = false; // Captura una sola frase
+        recognition.interimResults = false; // Solo resultados finales
+
+        recognition.onstart = () => {
+          console.log("Reconocimiento de voz iniciado.");
+          isRecording = true;
+          recordButton.textContent = "Detener Grabación";
+          recordButton.classList.add("recording");
+          statusDiv.textContent = "Escuchando...";
+          statusDiv.style.color = "red";
+        };
+
+        recognition.onresult = (event) => {
+          const transcript =
+            event.results[event.results.length - 1][0].transcript.trim();
+          console.log("Transcripción:", transcript);
+          if (transcript) {
+            addMessage(`${transcript}`, "user-message"); // Show user's spoken words
+            if (!sendData(transcript)) {
+              console.error("Fallo al enviar texto transcrito.");
+            }
+          }
+        };
+
+        recognition.onerror = (event) => {
+          console.error("Error en reconocimiento de voz:", event.error);
+          let errorMsg = event.error;
+          if (event.error === "no-speech") {
+            errorMsg = "No se detectó voz.";
+          } else if (event.error === "audio-capture") {
+            errorMsg =
+              "Error al capturar audio (micrófono no encontrado o sin permiso).";
+          } else if (event.error === "not-allowed") {
+            errorMsg = "Permiso para micrófono denegado.";
+          }
+          addMessage(`Error de grabación: ${errorMsg}`, "system-message");
+          stopRecording(); // Asegura que se detenga el estado de grabación
+        };
+
+        recognition.onend = () => {
+          console.log("Reconocimiento de voz finalizado.");
+          stopRecording(); // Llama a la función unificada para detener
+        };
+      }
+
+      function startRecording() {
+        if (!isRecording && recognition) {
+          try {
+            // <<< INICIO: Detener audio existente >>>
+            if (isPlaying && currentAudioSource) {
+              console.log("Deteniendo reproducción de audio existente...");
+              currentAudioSource.stop(); // Detiene la fuente de audio
+              // El evento onended debería limpiar currentAudioSource y isPlaying,
+              // pero lo hacemos aquí por seguridad si onended no se dispara rápido.
+              isPlaying = false;
+              currentAudioSource = null;
+              // Opcional: ¿Limpiar también la cola de buffers?
+              // audioBufferQueue = [];
+            }
+            // <<< FIN: Detener audio existente >>>
+
+            // Inicializa el AudioContext con interacción del usuario si aún no lo está
+            initializeAudio();
+            recognition.start();
+          } catch (e) {
+            console.error("Error al iniciar grabación:", e);
+            addMessage("No se pudo iniciar la grabación.", "system-message");
+          }
+        }
+      }
+
+      function stopRecording() {
+        if (isRecording && recognition) {
+          try {
+            recognition.stop(); // Esto llamará a onend eventualmente
+          } catch (e) {
+            // Manejar error si ya se detuvo o hubo problema
+            console.warn("Problema al intentar detener grabación:", e);
+          }
+        }
+        // Resetear estado visual independientemente de si recognition.stop() funcionó
+        isRecording = false;
+        recordButton.textContent = "🎤 Grabar";
+        recordButton.classList.remove("recording");
+        if (statusDiv.textContent === "Escuchando...") {
+          // Evita sobreescribir otros estados
+          statusDiv.textContent =
+            websocket && websocket.readyState === WebSocket.OPEN
+              ? "Conectado."
+              : "Desconectado";
+          statusDiv.style.color =
+            websocket && websocket.readyState === WebSocket.OPEN
+              ? "green"
+              : "orange";
+        }
+      }
+
+      function toggleRecording() {
+        if (isRecording) {
+          stopRecording();
+        } else {
+          startRecording();
+        }
+      }
+
+      // --- UI Functions ---
+      function addMessage(text, className) {
+        const messageElement = document.createElement("div");
+        messageElement.textContent = text;
+        messageElement.className = `message ${className}`;
+        chatbox.appendChild(messageElement);
+        chatbox.scrollTop = chatbox.scrollHeight;
+      }
+
+      function sendTextMessage() {
+        initializeAudio(); // Iniciar audio context al enviar texto también
+        const text = textInput.value.trim();
+        if (text) {
+          addMessage(`${text}`, "user-message"); // Show user's typed words
+          if (sendData(text)) {
+            textInput.value = "";
+          }
+        }
+      }
+
+      // --- Event Listeners ---
+      sendButton.addEventListener("click", sendTextMessage);
+      textInput.addEventListener("keypress", (event) => {
+        if (event.key === "Enter") {
+          sendTextMessage();
+        }
+      });
+      recordButton.addEventListener("click", toggleRecording);
+    </script>
+  </body>
+</html>
